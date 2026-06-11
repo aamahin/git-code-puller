@@ -1,0 +1,182 @@
+# Copyright (C) 2024 Your Name
+# This file is distributed under the GPL-2.0+.
+msgid ""
+msgstr ""
+"Project-Id-Version: Git Code Update 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-01-01 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: git-code-update.php:25
+msgid "Git Code Update"
+msgstr ""
+
+#: git-code-update.php:26
+msgid "Pull code directly from a GitHub repository into the WordPress plugins folder."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:55
+msgid "Settings"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:70
+msgid "Repository Settings"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:71
+msgid "Configure the GitHub repository settings to pull code from."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:78
+msgid "GitHub Repository URL"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:83
+msgid "Enter the full GitHub repository URL (e.g., https://github.com/username/repo-name)."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:91
+msgid "Branch Name"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:96
+msgid "Specify which branch to pull (e.g., main or master)."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:104
+msgid "Target Plugin Folder Name"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:109
+msgid "Destination folder name inside wp-content/plugins/."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:150
+msgid "Please enter a valid GitHub repository URL."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:197
+msgid "How it works"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:198
+msgid "This plugin allows you to pull code directly from a GitHub repository into your WordPress plugins folder. Configure the settings below and click \"Pull Code\" to deploy."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:208
+msgid "Save Settings"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:214
+msgid "Pull Code from GitHub"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:218
+msgid "Last Pull:"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:230
+msgid "Pull Code Now"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:236
+msgid "Operation Log"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:242
+msgid "Important Notes"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:244
+msgid "Always backup your files before pulling code."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:245
+msgid "The target folder will be overwritten with the repository contents."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:246
+msgid "Make sure the GitHub repository is public or accessible from your server."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:247
+msgid "The branch name must exist in the repository."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:279
+msgid "You do not have permission to perform this action."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:294
+msgid "Please configure the GitHub Repository URL in settings."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:301
+msgid "Please configure the Target Plugin Folder Name in settings."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:308
+msgid "Invalid GitHub repository URL."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:326
+msgid "Failed to download ZIP: %s"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:346
+msgid "Failed to extract ZIP: %s"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:364
+msgid "Invalid ZIP structure. No directory found in extracted files."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:376
+msgid "Failed to copy files: %s"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:399
+msgid "Code pulled successfully! Files have been deployed to the target folder."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:422
+msgid "HTTP error %d while downloading file."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:433
+msgid "Downloaded file is empty or does not exist."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:451
+msgid "ZipArchive PHP extension is not available."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:462
+msgid "Failed to open ZIP file. Error code: %d"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:487
+msgid "Could not initialize WordPress Filesystem."
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:496
+msgid "Source directory does not exist: %s"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:551
+msgid "Failed to open directory: %s"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:579
+msgid "Failed to read file: %s"
+msgstr ""
+
+#: includes/class-git-code-update-admin.php:591
+msgid "Failed to write file: %s"
+msgstr ""
