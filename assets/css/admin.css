@@ -53,7 +53,182 @@
 	max-width: 500px;
 }
 
-/* Pull Section */
+/* ============================================
+   Repeatable Repository Field Group
+   ============================================ */
+
+/* Repository Row */
+.git-code-update-repo-row {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	margin-bottom: 15px;
+	transition: box-shadow 0.2s ease;
+}
+
+.git-code-update-repo-row:hover {
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.git-code-update-repo-row:last-of-type {
+	margin-bottom: 10px;
+}
+
+/* Repository Header */
+.git-code-update-repo-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	background: #f0f0f1;
+	padding: 10px 15px;
+	border-bottom: 1px solid #c3c4c7;
+	border-radius: 4px 4px 0 0;
+}
+
+.git-code-update-repo-title {
+	font-size: 14px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.git-code-update-remove-repo {
+	color: #d63638;
+	cursor: pointer;
+	background: none;
+	border: none;
+	padding: 2px;
+	line-height: 1;
+	display: flex;
+	align-items: center;
+	transition: color 0.2s ease;
+}
+
+.git-code-update-remove-repo:hover {
+	color: #a00;
+}
+
+.git-code-update-remove-repo .dashicons {
+	font-size: 18px;
+	width: 18px;
+	height: 18px;
+}
+
+/* Repository Fields */
+.git-code-update-repo-fields {
+	padding: 15px;
+}
+
+.git-code-update-field-row {
+	margin: 0 0 12px 0;
+}
+
+.git-code-update-field-row:last-child {
+	margin-bottom: 0;
+}
+
+.git-code-update-field-row label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 4px;
+	font-size: 13px;
+	color: #1d2327;
+}
+
+.git-code-update-field-row input.regular-text {
+	width: 100%;
+	max-width: 500px;
+}
+
+.git-code-update-field-row .description {
+	display: block;
+	margin-top: 4px;
+	font-size: 12px;
+	color: #787c82;
+}
+
+/* Last Pull Row */
+.git-code-update-last-pull-row {
+	background: #f9f9f9;
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 13px;
+}
+
+.git-code-update-last-pull-row strong {
+	color: #1d2327;
+}
+
+/* Pull Single Button */
+.git-code-update-pull-single-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 12px;
+	height: 32px;
+	font-size: 13px;
+	border-radius: 3px;
+	transition: all 0.3s ease;
+}
+
+.git-code-update-pull-single-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.git-code-update-pull-single-btn .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+.git-code-update-pull-single-btn.loading {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.git-code-update-pull-single-btn.loading .dashicons {
+	animation: gcu-spin 1s linear infinite;
+}
+
+/* Single Repo Status */
+.git-code-update-single-status {
+	display: inline-block;
+	margin-left: 10px;
+	font-size: 13px;
+	font-weight: 500;
+	vertical-align: middle;
+}
+
+.git-code-update-single-status.success {
+	color: #00a32a;
+}
+
+.git-code-update-single-status.error {
+	color: #d63638;
+}
+
+.git-code-update-single-status.loading {
+	color: #2271b1;
+}
+
+/* Add Repository Button */
+#git-code-update-add-repo {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 5px;
+}
+
+#git-code-update-add-repo .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+/* ============================================
+   Pull Section & Status (Global)
+   ============================================ */
+
 .git-code-update-pull-section {
 	background: #fff;
 	border: 1px solid #c3c4c7;
@@ -111,10 +286,10 @@
 }
 
 #git-code-update-pull-btn.loading .dashicons {
-	animation: spin 1s linear infinite;
+	animation: gcu-spin 1s linear infinite;
 }
 
-@keyframes spin {
+@keyframes gcu-spin {
 	from {
 		transform: rotate(0deg);
 	}
@@ -234,6 +409,23 @@
 	}
 
 	#git-code-update-pull-btn {
+		width: 100%;
+		justify-content: center;
+	}
+
+	.git-code-update-repo-header {
+		padding: 8px 12px;
+	}
+
+	.git-code-update-repo-fields {
+		padding: 12px;
+	}
+
+	.git-code-update-field-row input.regular-text {
+		max-width: 100%;
+	}
+
+	.git-code-update-pull-single-btn {
 		width: 100%;
 		justify-content: center;
 	}

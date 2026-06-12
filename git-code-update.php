@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Git Code Update
  * Plugin URI:  https://github.com/your-repo/git-code-update
- * Description: Pull code directly from a GitHub repository into the WordPress plugins folder. Enables quick deployment of plugin updates from GitHub without manual file uploads.
- * Version:     1.0.0
+ * Description: Pull code directly from GitHub repositories into the WordPress plugins folder. Supports multiple repositories with quick deployment of plugin updates from GitHub without manual file uploads.
+ * Version:     1.1.0
  * Author:      Your Name
  * Author URI:  https://yourwebsite.com
  * License:     GPL-2.0+
@@ -24,7 +24,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Current plugin version.
  */
-define( 'GIT_CODE_UPDATE_VERSION', '1.0.0' );
+define( 'GIT_CODE_UPDATE_VERSION', '1.1.0' );
 
 /**
  * Plugin directory path.
@@ -73,18 +73,52 @@ function git_code_update_init() {
 add_action( 'plugins_loaded', 'git_code_update_init' );
 
 /**
+ * Migrate old single-repo settings to new multi-repo format.
+ *
+ * @param array $settings Current settings.
+ * @return array Migrated settings.
+ */
+function git_code_update_migrate_settings( $settings ) {
+	// If old format (has 'repo_url' key directly), migrate to new format.
+	if ( isset( $settings['repo_url'] ) && ! isset( $settings['repos'] ) ) {
+		$repo = array(
+			'repo_url'      => $settings['repo_url'] ?? '',
+			'branch_name'   => $settings['branch_name'] ?? 'main',
+			'target_folder' => $settings['target_folder'] ?? '',
+			'last_pull_time'=> $settings['last_pull_time'] ?? '',
+		);
+		$settings = array(
+			'repos' => array( $repo ),
+		);
+		update_option( 'git_code_update_settings', $settings );
+	}
+
+	// Ensure repos key exists.
+	if ( ! isset( $settings['repos'] ) || ! is_array( $settings['repos'] ) ) {
+		$settings['repos'] = array();
+	}
+
+	return $settings;
+}
+
+/**
  * Activation hook - set default options.
  *
  * @return void
  */
 function git_code_update_activate() {
 	$defaults = array(
-		'repo_url'       => '',
-		'branch_name'    => 'main',
-		'target_folder'  => '',
-		'last_pull_time' => '',
+		'repos' => array(
+			array(
+				'repo_url'      => '',
+				'branch_name'   => 'main',
+				'target_folder' => '',
+				'last_pull_time'=> '',
+			),
+		),
 	);
 	$existing = get_option( 'git_code_update_settings', array() );
+	$existing = git_code_update_migrate_settings( $existing );
 	$settings = wp_parse_args( $existing, $defaults );
 	update_option( 'git_code_update_settings', $settings );
 }

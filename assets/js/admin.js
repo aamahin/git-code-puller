@@ -1,7 +1,7 @@
 /**
  * Git Code Update - Admin JavaScript
  *
- * Handles the pull code button click, AJAX requests, and UI updates.
+ * Handles repeatable repository fields, per-repo pull buttons, and AJAX requests.
  *
  * @package Git_Code_Update
  * @since   1.0.0
@@ -12,33 +12,118 @@
 
 	// DOM Ready.
 	$(function () {
-		const $pullBtn = $('#git-code-update-pull-btn');
-		const $status = $('#git-code-update-status');
-		const $statusMessage = $('#git-code-update-status-message');
+		const $container = $('#git-code-update-repos-container');
+		const $addBtn = $('#git-code-update-add-repo');
+		const $globalStatus = $('#git-code-update-status');
+		const $globalStatusMessage = $('#git-code-update-status-message');
 		const $logSection = $('#git-code-update-log-section');
 		const $logOutput = $('#git-code-update-log-output');
 
 		/**
-		 * Show status message.
+		 * Get the next index for a new repo row.
+		 *
+		 * @returns {number} Next index value.
+		 */
+		function getNextIndex() {
+			const rows = $container.find('.git-code-update-repo-row');
+			if (rows.length === 0) {
+				return 0;
+			}
+			let maxIndex = -1;
+			rows.each(function () {
+				const idx = parseInt($(this).attr('data-index'), 10);
+				if (idx > maxIndex) {
+					maxIndex = idx;
+				}
+			});
+			return maxIndex + 1;
+		}
+
+		/**
+		 * Re-index all repo rows (update titles).
+		 */
+		function reindexRows() {
+			$container.find('.git-code-update-repo-row').each(function (i) {
+				$(this)
+					.find('.git-code-update-repo-title')
+					.text(gitCodeUpdate.strings.repoLabel + (i + 1));
+			});
+		}
+
+		/**
+		 * Add a new repository row.
+		 */
+		$addBtn.on('click', function (e) {
+			e.preventDefault();
+
+			const template = $('#git-code-update-repo-template').html();
+			const nextIndex = getNextIndex();
+			const nextDisplay = $container.find('.git-code-update-repo-row').length + 1;
+
+			const newRow = template
+				.replace(/\{\{INDEX\}\}/g, nextIndex)
+				.replace(/\{\{INDEX_PLUS_1\}\}/g, nextDisplay);
+
+			$container.append(newRow);
+			reindexRows();
+
+			// Scroll to the new row.
+			const $added = $container.find('.git-code-update-repo-row').last();
+			$('html, body').animate(
+				{
+					scrollTop: $added.offset().top - 50,
+				},
+				300
+			);
+		});
+
+		/**
+		 * Remove a repository row.
+		 */
+		$container.on('click', '.git-code-update-remove-repo', function (e) {
+			e.preventDefault();
+
+			const $row = $(this).closest('.git-code-update-repo-row');
+			const rowCount = $container.find('.git-code-update-repo-row').length;
+
+			if (rowCount <= 1) {
+				// Don't remove the last row, just clear its fields instead.
+				$row.find('input[type="text"]').val('');
+				$row.find('input[name*="[branch_name]"]').val('main');
+				$row
+					.find('.git-code-update-single-status')
+					.text('')
+					.removeClass('success error loading');
+				$row.find('.git-code-update-last-pull-row').remove();
+				return;
+			}
+
+			$row.fadeOut(200, function () {
+				$(this).remove();
+				reindexRows();
+			});
+		});
+
+		/**
+		 * Show global status message.
 		 *
 		 * @param {string} message - The message to display.
 		 * @param {string} type    - The message type (success, error, info).
 		 */
-		function showStatus(message, type) {
-			$status
+		function showGlobalStatus(message, type) {
+			$globalStatus
 				.removeClass('success error info')
 				.addClass(type)
 				.show();
-
-			$statusMessage.html(message);
+			$globalStatusMessage.html(message);
 		}
 
 		/**
-		 * Hide status message.
+		 * Hide global status message.
 		 */
-		function hideStatus() {
-			$status.hide();
-			$statusMessage.html('');
+		function hideGlobalStatus() {
+			$globalStatus.hide();
+			$globalStatusMessage.html('');
 		}
 
 		/**
@@ -50,37 +135,20 @@
 			if (logEntries && logEntries.length > 0) {
 				$logSection.show();
 				$logOutput.text(logEntries.join('\n'));
-				// Auto-scroll to bottom.
 				$logOutput.scrollTop($logOutput[0].scrollHeight);
 			}
 		}
 
 		/**
-		 * Set button loading state.
-		 *
-		 * @param {boolean} loading - Whether the button is in loading state.
+		 * Handle per-repo pull button click.
 		 */
-		function setButtonLoading(loading) {
-			if (loading) {
-				$pullBtn
-					.addClass('loading')
-					.prop('disabled', true)
-					.find('.dashicons')
-					.addClass('dashicons-update-alt')
-					.removeClass('dashicons-update');
-			} else {
-				$pullBtn
-					.removeClass('loading')
-					.prop('disabled', false)
-					.find('.dashicons')
-					.removeClass('dashicons-update-alt')
-					.addClass('dashicons-update');
-			}
-		}
-
-		// Pull button click handler.
-		$pullBtn.on('click', function (e) {
+		$container.on('click', '.git-code-update-pull-single-btn', function (e) {
 			e.preventDefault();
+
+			const $btn = $(this);
+			const repoIndex = $btn.attr('data-index');
+			const $row = $btn.closest('.git-code-update-repo-row');
+			const $status = $row.find('.git-code-update-single-status');
 
 			// Confirm action.
 			if (!confirm(gitCodeUpdate.strings.confirmPull)) {
@@ -88,17 +156,16 @@
 			}
 
 			// Set loading state.
-			setButtonLoading(true);
-			hideStatus();
+			$btn.addClass('loading').prop('disabled', true);
+			$status
+				.text('')
+				.removeClass('success error')
+				.addClass('loading')
+				.html('<span class="spinner is-active" style="float:none;margin:0 4px 0 0;"></span> ' + gitCodeUpdate.strings.pulling);
+
+			hideGlobalStatus();
 			$logSection.hide();
 			$logOutput.text('');
-
-			// Show loading status.
-			showStatus(
-				'<span class="spinner is-active"></span> ' +
-					gitCodeUpdate.strings.pulling,
-				'info'
-			);
 
 			// Send AJAX request.
 			$.ajax({
@@ -107,24 +174,44 @@
 				data: {
 					action: 'git_code_update_pull',
 					nonce: gitCodeUpdate.nonce,
+					repo_index: repoIndex,
 				},
 				success: function (response) {
 					if (response.success) {
-						showStatus('✓ ' + response.data.message, 'success');
+						$status
+							.removeClass('loading')
+							.addClass('success')
+							.text('✓ ' + response.data.message);
+
+						showGlobalStatus('✓ ' + response.data.message, 'success');
 						displayLog(response.data.log);
 
-						// Update last pull timestamp if displayed.
+						// Update last pull timestamp for this repo.
 						if (response.data.timestamp) {
-							$('.git-code-update-last-pull').html(
-								'<strong>Last Pull:</strong> ' +
-									response.data.timestamp
-							);
+							const $lastPullRow = $row.find('.git-code-update-last-pull-row');
+							if ($lastPullRow.length > 0) {
+								$lastPullRow
+									.find('.git-code-update-last-pull-time')
+									.text(response.data.timestamp);
+							} else {
+								// Insert last pull row before the pull button row.
+								const lastPullHtml =
+									'<p class="git-code-update-field-row git-code-update-last-pull-row">' +
+									'<strong>' + 'Last Pull:' + '</strong> ' +
+									'<span class="git-code-update-last-pull-time" data-index="' + repoIndex + '">' +
+									response.data.timestamp +
+									'</span></p>';
+								$btn.closest('.git-code-update-field-row').before(lastPullHtml);
+							}
 						}
 					} else {
-						showStatus(
-							'✗ ' +
-								(response.data.message ||
-									gitCodeUpdate.strings.error),
+						$status
+							.removeClass('loading')
+							.addClass('error')
+							.text('✗ ' + (response.data.message || gitCodeUpdate.strings.error));
+
+						showGlobalStatus(
+							'✗ ' + (response.data.message || gitCodeUpdate.strings.error),
 							'error'
 						);
 						if (response.data.log) {
@@ -141,10 +228,16 @@
 						errorMessage += ' (' + error + ')';
 					}
 
-					showStatus('✗ ' + errorMessage, 'error');
+					$status.removeClass('loading').addClass('error').text('✗ ' + errorMessage);
+					showGlobalStatus('✗ ' + errorMessage, 'error');
 				},
 				complete: function () {
-					setButtonLoading(false);
+					$btn.removeClass('loading').prop('disabled', false);
+
+					// Clear loading spinner from status after a brief moment.
+					setTimeout(function () {
+						$status.find('.spinner').remove();
+					}, 500);
 				},
 			});
 		});

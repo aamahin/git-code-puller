@@ -3,6 +3,7 @@
  * Admin functionality for Git Code Update plugin.
  *
  * Handles the settings page, form processing, and GitHub pull operations.
+ * Supports multiple repositories with repeatable field groups.
  *
  * @package Git_Code_Update
  * @since   1.0.0
@@ -41,7 +42,16 @@ class Git_Code_Update_Admin {
 	 */
 	public function init() {
 		$this->settings = get_option( 'git_code_update_settings', array() );
-		$this->log      = get_option( 'git_code_update_log', array() );
+
+		// Ensure repos key exists.
+		if ( ! isset( $this->settings['repos'] ) || ! is_array( $this->settings['repos'] ) ) {
+			$this->settings['repos'] = array();
+		}
+
+		// Migrate old format if needed.
+		$this->settings = git_code_update_migrate_settings( $this->settings );
+
+		$this->log = get_option( 'git_code_update_log', array() );
 
 		// Add settings page.
 		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
@@ -97,46 +107,14 @@ class Git_Code_Update_Admin {
 			'git-code-update'
 		);
 
-		// GitHub Repository URL field.
+		// Repositories repeatable field group.
 		add_settings_field(
-			'repo_url',
-			__( 'GitHub Repository URL', 'git-code-update' ),
-			array( $this, 'render_text_field' ),
+			'repos',
+			__( 'Repositories', 'git-code-update' ),
+			array( $this, 'render_repos_field' ),
 			'git-code-update',
 			'git_code_update_general_section',
-			array(
-				'id'          => 'repo_url',
-				'description' => __( 'Enter the full GitHub repository URL (e.g., https://github.com/username/repo-name).', 'git-code-update' ),
-				'placeholder' => 'https://github.com/username/repo-name',
-			)
-		);
-
-		// Branch Name field.
-		add_settings_field(
-			'branch_name',
-			__( 'Branch Name', 'git-code-update' ),
-			array( $this, 'render_text_field' ),
-			'git-code-update',
-			'git_code_update_general_section',
-			array(
-				'id'          => 'branch_name',
-				'description' => __( 'Specify which branch to pull (e.g., main or master).', 'git-code-update' ),
-				'placeholder' => 'main',
-			)
-		);
-
-		// Target Plugin Folder Name field.
-		add_settings_field(
-			'target_folder',
-			__( 'Target Plugin Folder Name', 'git-code-update' ),
-			array( $this, 'render_text_field' ),
-			'git-code-update',
-			'git_code_update_general_section',
-			array(
-				'id'          => 'target_folder',
-				'description' => __( 'Destination folder name inside wp-content/plugins/.', 'git-code-update' ),
-				'placeholder' => 'my-plugin',
-			)
+			array()
 		);
 	}
 
@@ -147,39 +125,70 @@ class Git_Code_Update_Admin {
 	 * @return array Sanitized values.
 	 */
 	public function sanitize_settings( $input ) {
-		$sanitized = array();
+		$sanitized = array(
+			'repos' => array(),
+		);
 
-		// Sanitize GitHub URL.
-		$sanitized['repo_url'] = esc_url_raw( trim( $input['repo_url'] ?? '' ) );
+		if ( isset( $input['repos'] ) && is_array( $input['repos'] ) ) {
+			foreach ( $input['repos'] as $index => $repo ) {
+				$clean_repo = array();
 
-		// Validate GitHub URL format.
-		if ( ! empty( $sanitized['repo_url'] ) && ! $this->is_valid_github_url( $sanitized['repo_url'] ) ) {
-			add_settings_error(
-				'git_code_update_settings',
-				'invalid_github_url',
-				__( 'Please enter a valid GitHub repository URL.', 'git-code-update' ),
-				'error'
+				// Sanitize GitHub URL.
+				$clean_repo['repo_url'] = esc_url_raw( trim( $repo['repo_url'] ?? '' ) );
+
+				// Validate GitHub URL format.
+				if ( ! empty( $clean_repo['repo_url'] ) && ! $this->is_valid_github_url( $clean_repo['repo_url'] ) ) {
+					add_settings_error(
+						'git_code_update_settings',
+						'invalid_github_url_' . $index,
+						sprintf(
+							/* translators: %d: Repository number */
+							__( 'Repository #%d: Please enter a valid GitHub repository URL.', 'git-code-update' ),
+							$index + 1
+						),
+						'error'
+					);
+					$clean_repo['repo_url'] = '';
+				}
+
+				// Sanitize branch name.
+				$clean_repo['branch_name'] = sanitize_text_field( trim( $repo['branch_name'] ?? 'main' ) );
+				if ( empty( $clean_repo['branch_name'] ) ) {
+					$clean_repo['branch_name'] = 'main';
+				}
+
+				// Sanitize target folder.
+				$clean_repo['target_folder'] = sanitize_text_field( trim( $repo['target_folder'] ?? '' ) );
+				if ( ! empty( $clean_repo['target_folder'] ) ) {
+					$clean_repo['target_folder'] = basename( $clean_repo['target_folder'] );
+					$clean_repo['target_folder'] = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $clean_repo['target_folder'] );
+				}
+
+				// Preserve last pull time from existing settings.
+				$existing_repos = $this->settings['repos'] ?? array();
+				$existing_repo  = $existing_repos[ $index ] ?? array();
+				$clean_repo['last_pull_time'] = $existing_repo['last_pull_time'] ?? '';
+
+				// Skip completely empty entries.
+				if ( empty( $clean_repo['repo_url'] ) && empty( $clean_repo['target_folder'] ) ) {
+					continue;
+				}
+
+				$sanitized['repos'][] = $clean_repo;
+			}
+		}
+
+		// Ensure at least one empty row exists for new entries.
+		if ( empty( $sanitized['repos'] ) ) {
+			$sanitized['repos'] = array(
+				array(
+					'repo_url'      => '',
+					'branch_name'   => 'main',
+					'target_folder' => '',
+					'last_pull_time'=> '',
+				),
 			);
-			$sanitized['repo_url'] = '';
 		}
-
-		// Sanitize branch name - allow alphanumeric, hyphens, underscores, dots, and slashes.
-		$sanitized['branch_name'] = sanitize_text_field( trim( $input['branch_name'] ?? 'main' ) );
-		if ( empty( $sanitized['branch_name'] ) ) {
-			$sanitized['branch_name'] = 'main';
-		}
-
-		// Sanitize target folder - only allow alphanumeric, hyphens, and underscores.
-		$sanitized['target_folder'] = sanitize_text_field( trim( $input['target_folder'] ?? '' ) );
-		if ( ! empty( $sanitized['target_folder'] ) ) {
-			// Remove any path traversal attempts.
-			$sanitized['target_folder'] = basename( $sanitized['target_folder'] );
-			// Only allow safe characters.
-			$sanitized['target_folder'] = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $sanitized['target_folder'] );
-		}
-
-		// Preserve last pull time.
-		$sanitized['last_pull_time'] = $this->settings['last_pull_time'] ?? '';
 
 		return $sanitized;
 	}
@@ -228,32 +237,166 @@ class Git_Code_Update_Admin {
 	 * @return void
 	 */
 	public function render_section_description() {
-		echo '<p>' . esc_html__( 'Configure the GitHub repository settings to pull code from.', 'git-code-update' ) . '</p>';
+		echo '<p>' . esc_html__( 'Configure one or more GitHub repositories. Each repository entry maps a GitHub repo to a target folder in wp-content/plugins/.', 'git-code-update' ) . '</p>';
 	}
 
 	/**
-	 * Render a text field.
+	 * Render the repeatable repos field group.
 	 *
 	 * @param array $args Field arguments.
 	 * @return void
 	 */
-	public function render_text_field( $args ) {
-		$id          = $args['id'];
-		$description = $args['description'];
-		$placeholder = $args['placeholder'] ?? '';
-		$value       = $this->settings[ $id ] ?? '';
+	public function render_repos_field( $args ) {
+		$repos = $this->settings['repos'] ?? array();
 
-		printf(
-			'<input type="text" id="%s" name="git_code_update_settings[%s]" value="%s" placeholder="%s" class="regular-text" />',
-			esc_attr( $id ),
-			esc_attr( $id ),
-			esc_attr( $value ),
-			esc_attr( $placeholder )
-		);
-		printf(
-			'<p class="description">%s</p>',
-			esc_html( $description )
-		);
+		// Ensure at least one entry.
+		if ( empty( $repos ) ) {
+			$repos = array(
+				array(
+					'repo_url'      => '',
+					'branch_name'   => 'main',
+					'target_folder' => '',
+					'last_pull_time'=> '',
+				),
+			);
+		}
+		?>
+		<div id="git-code-update-repos-container">
+			<?php foreach ( $repos as $index => $repo ) : ?>
+				<div class="git-code-update-repo-row" data-index="<?php echo esc_attr( $index ); ?>">
+					<div class="git-code-update-repo-header">
+						<span class="git-code-update-repo-title">
+							<?php
+							printf(
+								/* translators: %d: Repository number */
+								esc_html__( 'Repository #%d', 'git-code-update' ),
+								$index + 1
+							);
+							?>
+						</span>
+						<button type="button" class="git-code-update-remove-repo button-link-delete" title="<?php esc_attr_e( 'Remove this repository', 'git-code-update' ); ?>">
+							<span class="dashicons dashicons-trash"></span>
+						</button>
+					</div>
+					<div class="git-code-update-repo-fields">
+						<p class="git-code-update-field-row">
+							<label>
+								<?php esc_html_e( 'GitHub Repository URL', 'git-code-update' ); ?>
+							</label>
+							<input type="text"
+								name="git_code_update_settings[repos][<?php echo esc_attr( $index ); ?>][repo_url]"
+								value="<?php echo esc_attr( $repo['repo_url'] ?? '' ); ?>"
+								placeholder="https://github.com/username/repo-name"
+								class="regular-text"
+							/>
+							<span class="description"><?php esc_html_e( 'Full GitHub repository URL.', 'git-code-update' ); ?></span>
+						</p>
+						<p class="git-code-update-field-row">
+							<label>
+								<?php esc_html_e( 'Branch Name', 'git-code-update' ); ?>
+							</label>
+							<input type="text"
+								name="git_code_update_settings[repos][<?php echo esc_attr( $index ); ?>][branch_name]"
+								value="<?php echo esc_attr( $repo['branch_name'] ?? 'main' ); ?>"
+								placeholder="main"
+								class="regular-text"
+							/>
+							<span class="description"><?php esc_html_e( 'Branch to pull (e.g., main, master, develop).', 'git-code-update' ); ?></span>
+						</p>
+						<p class="git-code-update-field-row">
+							<label>
+								<?php esc_html_e( 'Target Plugin Folder', 'git-code-update' ); ?>
+							</label>
+							<input type="text"
+								name="git_code_update_settings[repos][<?php echo esc_attr( $index ); ?>][target_folder]"
+								value="<?php echo esc_attr( $repo['target_folder'] ?? '' ); ?>"
+								placeholder="my-plugin"
+								class="regular-text"
+							/>
+							<span class="description"><?php esc_html_e( 'Destination folder inside wp-content/plugins/.', 'git-code-update' ); ?></span>
+						</p>
+						<?php if ( ! empty( $repo['last_pull_time'] ) ) : ?>
+							<p class="git-code-update-field-row git-code-update-last-pull-row">
+								<strong><?php esc_html_e( 'Last Pull:', 'git-code-update' ); ?></strong>
+								<span class="git-code-update-last-pull-time" data-index="<?php echo esc_attr( $index ); ?>">
+									<?php echo esc_html( $repo['last_pull_time'] ); ?>
+								</span>
+							</p>
+						<?php endif; ?>
+						<p class="git-code-update-field-row">
+							<button type="button" class="button git-code-update-pull-single-btn" data-index="<?php echo esc_attr( $index ); ?>">
+								<span class="dashicons dashicons-update" style="margin-top: 4px;"></span>
+								<?php esc_html_e( 'Pull Code', 'git-code-update' ); ?>
+							</button>
+							<span class="git-code-update-single-status" data-index="<?php echo esc_attr( $index ); ?>"></span>
+						</p>
+					</div>
+				</div>
+			<?php endforeach; ?>
+		</div>
+
+		<script type="text/html" id="git-code-update-repo-template">
+			<div class="git-code-update-repo-row" data-index="{{INDEX}}">
+				<div class="git-code-update-repo-header">
+					<span class="git-code-update-repo-title">
+						<?php
+						/* translators: {{INDEX}} will be replaced by JS */
+						echo esc_html__( 'Repository #{{INDEX_PLUS_1}}', 'git-code-update' );
+						?>
+					</span>
+					<button type="button" class="git-code-update-remove-repo button-link-delete" title="<?php esc_attr_e( 'Remove this repository', 'git-code-update' ); ?>">
+						<span class="dashicons dashicons-trash"></span>
+					</button>
+				</div>
+				<div class="git-code-update-repo-fields">
+					<p class="git-code-update-field-row">
+						<label><?php esc_html_e( 'GitHub Repository URL', 'git-code-update' ); ?></label>
+						<input type="text"
+							name="git_code_update_settings[repos][{{INDEX}}][repo_url]"
+							value=""
+							placeholder="https://github.com/username/repo-name"
+							class="regular-text"
+						/>
+						<span class="description"><?php esc_html_e( 'Full GitHub repository URL.', 'git-code-update' ); ?></span>
+					</p>
+					<p class="git-code-update-field-row">
+						<label><?php esc_html_e( 'Branch Name', 'git-code-update' ); ?></label>
+						<input type="text"
+							name="git_code_update_settings[repos][{{INDEX}}][branch_name]"
+							value="main"
+							placeholder="main"
+							class="regular-text"
+						/>
+						<span class="description"><?php esc_html_e( 'Branch to pull (e.g., main, master, develop).', 'git-code-update' ); ?></span>
+					</p>
+					<p class="git-code-update-field-row">
+						<label><?php esc_html_e( 'Target Plugin Folder', 'git-code-update' ); ?></label>
+						<input type="text"
+							name="git_code_update_settings[repos][{{INDEX}}][target_folder]"
+							value=""
+							placeholder="my-plugin"
+							class="regular-text"
+						/>
+						<span class="description"><?php esc_html_e( 'Destination folder inside wp-content/plugins/.', 'git-code-update' ); ?></span>
+					</p>
+					<p class="git-code-update-field-row">
+						<button type="button" class="button git-code-update-pull-single-btn" data-index="{{INDEX}}">
+							<span class="dashicons dashicons-update" style="margin-top: 4px;"></span>
+							<?php esc_html_e( 'Pull Code', 'git-code-update' ); ?>
+						</button>
+						<span class="git-code-update-single-status" data-index="{{INDEX}}"></span>
+					</p>
+				</div>
+			</div>
+		</script>
+
+		<p>
+			<button type="button" id="git-code-update-add-repo" class="button button-secondary">
+				<span class="dashicons dashicons-plus-alt" style="margin-top: 4px;"></span>
+				<?php esc_html_e( 'Add Repository', 'git-code-update' ); ?>
+			</button>
+		</p>
+		<?php
 	}
 
 	/**
@@ -266,15 +409,13 @@ class Git_Code_Update_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-
-		$last_pull = $this->settings['last_pull_time'] ?? '';
 		?>
 		<div class="wrap git-code-update-wrap">
 			<h1><?php echo esc_html__( 'Git Code Update', 'git-code-update' ); ?></h1>
 
 			<div class="git-code-update-info-box">
 				<h2><?php echo esc_html__( 'How it works', 'git-code-update' ); ?></h2>
-				<p><?php echo esc_html__( 'This plugin allows you to pull code directly from a GitHub repository into your WordPress plugins folder. Configure the settings below and click "Pull Code" to deploy.', 'git-code-update' ); ?></p>
+				<p><?php echo esc_html__( 'This plugin allows you to pull code directly from GitHub repositories into your WordPress plugins folder. Add one or more repositories below, configure each one, and click "Pull Code" on any repo to deploy.', 'git-code-update' ); ?></p>
 			</div>
 
 			<form method="post" action="options.php" id="git-code-update-settings-form">
@@ -285,31 +426,13 @@ class Git_Code_Update_Admin {
 				?>
 			</form>
 
-			<div class="git-code-update-pull-section">
-				<h2><?php echo esc_html__( 'Pull Code from GitHub', 'git-code-update' ); ?></h2>
+			<div id="git-code-update-status" class="git-code-update-status" style="display: none;">
+				<p id="git-code-update-status-message"></p>
+			</div>
 
-				<?php if ( ! empty( $last_pull ) ) : ?>
-					<p class="git-code-update-last-pull">
-						<strong><?php echo esc_html__( 'Last Pull:', 'git-code-update' ); ?></strong>
-						<?php echo esc_html( $last_pull ); ?>
-					</p>
-				<?php endif; ?>
-
-				<div id="git-code-update-status" class="git-code-update-status" style="display: none;">
-					<p id="git-code-update-status-message"></p>
-				</div>
-
-				<p>
-					<button type="button" id="git-code-update-pull-btn" class="button button-primary button-hero">
-						<span class="dashicons dashicons-update" style="margin-top: 6px;"></span>
-						<?php echo esc_html__( 'Pull Code Now', 'git-code-update' ); ?>
-					</button>
-				</p>
-
-				<div id="git-code-update-log-section" style="display: none;">
-					<h3><?php echo esc_html__( 'Operation Log', 'git-code-update' ); ?></h3>
-					<pre id="git-code-update-log-output"></pre>
-				</div>
+			<div id="git-code-update-log-section" style="display: none;">
+				<h3><?php echo esc_html__( 'Operation Log', 'git-code-update' ); ?></h3>
+				<pre id="git-code-update-log-output"></pre>
 			</div>
 
 			<div class="git-code-update-help-box">
@@ -319,6 +442,7 @@ class Git_Code_Update_Admin {
 					<li><?php echo esc_html__( 'The target folder will be overwritten with the repository contents.', 'git-code-update' ); ?></li>
 					<li><?php echo esc_html__( 'Make sure the GitHub repository is public or accessible from your server.', 'git-code-update' ); ?></li>
 					<li><?php echo esc_html__( 'The branch name must exist in the repository.', 'git-code-update' ); ?></li>
+					<li><?php echo esc_html__( 'Save your settings before pulling code from a newly added repository.', 'git-code-update' ); ?></li>
 				</ul>
 			</div>
 		</div>
@@ -359,17 +483,18 @@ class Git_Code_Update_Admin {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'git_code_update_pull_nonce' ),
 				'strings' => array(
-					'confirmPull' => __( 'Are you sure you want to pull code? This will overwrite the target folder.', 'git-code-update' ),
-					'pulling'     => __( 'Pulling code...', 'git-code-update' ),
-					'success'     => __( 'Code pulled successfully!', 'git-code-update' ),
-					'error'       => __( 'Error pulling code. Please check the log for details.', 'git-code-update' ),
+					'confirmPull'  => __( 'Are you sure you want to pull code for this repository? This will overwrite the target folder.', 'git-code-update' ),
+					'pulling'      => __( 'Pulling code...', 'git-code-update' ),
+					'success'      => __( 'Code pulled successfully!', 'git-code-update' ),
+					'error'        => __( 'Error pulling code. Please check the log for details.', 'git-code-update' ),
+					'repoLabel'    => __( 'Repository #', 'git-code-update' ),
 				),
 			)
 		);
 	}
 
 	/**
-	 * Handle AJAX request to pull code.
+	 * Handle AJAX request to pull code for a specific repository.
 	 *
 	 * @return void
 	 */
@@ -386,19 +511,34 @@ class Git_Code_Update_Admin {
 			);
 		}
 
+		// Get repo index from request.
+		$repo_index = isset( $_POST['repo_index'] ) ? absint( $_POST['repo_index'] ) : 0;
+
 		// Refresh settings.
 		$this->settings = get_option( 'git_code_update_settings', array() );
+		$this->settings = git_code_update_migrate_settings( $this->settings );
+		$this->log      = get_option( 'git_code_update_log', array() );
 
-		// Validate settings.
-		$repo_url      = $this->settings['repo_url'] ?? '';
-		$branch_name   = $this->settings['branch_name'] ?? 'main';
-		$target_folder = $this->settings['target_folder'] ?? '';
+		// Validate repo index.
+		$repos = $this->settings['repos'] ?? array();
+		if ( ! isset( $repos[ $repo_index ] ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Invalid repository index.', 'git-code-update' ),
+				)
+			);
+		}
+
+		$repo         = $repos[ $repo_index ];
+		$repo_url     = $repo['repo_url'] ?? '';
+		$branch_name  = $repo['branch_name'] ?? 'main';
+		$target_folder = $repo['target_folder'] ?? '';
 
 		// Validation checks.
 		if ( empty( $repo_url ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'Please configure the GitHub Repository URL in settings.', 'git-code-update' ),
+					'message' => __( 'Please configure the GitHub Repository URL for this entry.', 'git-code-update' ),
 				)
 			);
 		}
@@ -406,7 +546,7 @@ class Git_Code_Update_Admin {
 		if ( empty( $target_folder ) ) {
 			wp_send_json_error(
 				array(
-					'message' => __( 'Please configure the Target Plugin Folder Name in settings.', 'git-code-update' ),
+					'message' => __( 'Please configure the Target Plugin Folder Name for this entry.', 'git-code-update' ),
 				)
 			);
 		}
@@ -420,19 +560,19 @@ class Git_Code_Update_Admin {
 		}
 
 		// Build the ZIP download URL.
-		$repo_url    = untrailingslashit( $repo_url );
-		$parsed      = wp_parse_url( $repo_url );
-		$path        = trim( $parsed['path'] ?? '', '/' );
-		$zip_url     = 'https://github.com/' . $path . '/archive/refs/heads/' . rawurlencode( $branch_name ) . '.zip';
+		$repo_url = untrailingslashit( $repo_url );
+		$parsed   = wp_parse_url( $repo_url );
+		$path     = trim( $parsed['path'] ?? '', '/' );
+		$zip_url  = 'https://github.com/' . $path . '/archive/refs/heads/' . rawurlencode( $branch_name ) . '.zip';
 
-		$this->add_log( 'Starting pull from: ' . $zip_url );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Starting pull from: ' . $zip_url );
 
 		// Step 1: Download the ZIP file.
-		$this->add_log( 'Downloading ZIP file...' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Downloading ZIP file...' );
 		$download_result = $this->download_file( $zip_url );
 
 		if ( is_wp_error( $download_result ) ) {
-			$this->add_log( 'Download failed: ' . $download_result->get_error_message() );
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] Download failed: ' . $download_result->get_error_message() );
 			$this->save_log();
 			wp_send_json_error(
 				array(
@@ -447,14 +587,14 @@ class Git_Code_Update_Admin {
 		}
 
 		$zip_path = $download_result['file_path'];
-		$this->add_log( 'ZIP downloaded to: ' . $zip_path );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] ZIP downloaded to: ' . $zip_path );
 
 		// Step 2: Extract the ZIP file.
-		$this->add_log( 'Extracting ZIP file...' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Extracting ZIP file...' );
 		$extract_result = $this->extract_zip( $zip_path );
 
 		if ( is_wp_error( $extract_result ) ) {
-			$this->add_log( 'Extraction failed: ' . $extract_result->get_error_message() );
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] Extraction failed: ' . $extract_result->get_error_message() );
 			$this->cleanup_temp_files( $zip_path );
 			$this->save_log();
 			wp_send_json_error(
@@ -470,18 +610,18 @@ class Git_Code_Update_Admin {
 		}
 
 		$extract_dir = $extract_result['extract_dir'];
-		$this->add_log( 'ZIP extracted to: ' . $extract_dir );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] ZIP extracted to: ' . $extract_dir );
 
 		// Step 3: Copy files to target directory.
 		$plugins_dir = WP_PLUGIN_DIR;
 		$target_dir  = $plugins_dir . '/' . $target_folder;
 
-		$this->add_log( 'Target directory: ' . $target_dir );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Target directory: ' . $target_dir );
 
 		// Find the extracted subdirectory (GitHub creates a folder like repo-branch).
 		$subdirs = glob( $extract_dir . '/*', GLOB_ONLYDIR );
 		if ( empty( $subdirs ) ) {
-			$this->add_log( 'No subdirectory found in extracted ZIP.' );
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] No subdirectory found in extracted ZIP.' );
 			$this->cleanup_temp_files( $zip_path );
 			$this->save_log();
 			wp_send_json_error(
@@ -492,15 +632,15 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		$source_dir = $subdirs[0]; // Use the first subdirectory.
-		$this->add_log( 'Source directory: ' . $source_dir );
+		$source_dir = $subdirs[0];
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Source directory: ' . $source_dir );
 
 		// Copy files to target.
-		$this->add_log( 'Copying files to target directory...' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Copying files to target directory...' );
 		$copy_result = $this->copy_directory( $source_dir, $target_dir );
 
 		if ( is_wp_error( $copy_result ) ) {
-			$this->add_log( 'Copy failed: ' . $copy_result->get_error_message() );
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] Copy failed: ' . $copy_result->get_error_message() );
 			$this->cleanup_temp_files( $zip_path );
 			$this->save_log();
 			wp_send_json_error(
@@ -515,25 +655,30 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		$this->add_log( 'Files copied successfully!' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Files copied successfully!' );
 
 		// Step 4: Cleanup temporary files.
-		$this->add_log( 'Cleaning up temporary files...' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Cleaning up temporary files...' );
 		$this->cleanup_temp_files( $zip_path );
-		$this->add_log( 'Cleanup complete.' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Cleanup complete.' );
 
-		// Update last pull time.
-		$this->settings['last_pull_time'] = current_time( 'mysql' );
+		// Update last pull time for this specific repo.
+		$this->settings['repos'][ $repo_index ]['last_pull_time'] = current_time( 'mysql' );
 		update_option( 'git_code_update_settings', $this->settings );
 
-		$this->add_log( 'Pull operation completed successfully!' );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Pull operation completed successfully!' );
 		$this->save_log();
 
 		wp_send_json_success(
 			array(
-				'message'   => __( 'Code pulled successfully! Files have been deployed to the target folder.', 'git-code-update' ),
-				'timestamp' => $this->settings['last_pull_time'],
-				'log'       => $this->log,
+				'message'    => sprintf(
+					/* translators: %s: Target folder name */
+					__( 'Code pulled successfully! Files have been deployed to: %s', 'git-code-update' ),
+					$target_folder
+				),
+				'timestamp'  => $this->settings['repos'][ $repo_index ]['last_pull_time'],
+				'repo_index' => $repo_index,
+				'log'        => $this->log,
 			)
 		);
 	}
@@ -545,7 +690,6 @@ class Git_Code_Update_Admin {
 	 * @return array|WP_Error Array with file_path on success, WP_Error on failure.
 	 */
 	private function download_file( $url ) {
-		// Create temp directory.
 		$temp_dir = get_temp_dir() . 'git-code-update-' . wp_generate_password( 12, false ) . '/';
 		wp_mkdir_p( $temp_dir );
 
@@ -582,7 +726,6 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		// Verify file exists and has content.
 		if ( ! file_exists( $file_path ) || 0 === filesize( $file_path ) ) {
 			$this->cleanup_temp_dir( $temp_dir );
 			return new WP_Error(
@@ -592,8 +735,8 @@ class Git_Code_Update_Admin {
 		}
 
 		return array(
-			'file_path'  => $file_path,
-			'temp_dir'   => $temp_dir,
+			'file_path' => $file_path,
+			'temp_dir'  => $temp_dir,
 		);
 	}
 
@@ -611,7 +754,7 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		$zip = new ZipArchive();
+		$zip    = new ZipArchive();
 		$result = $zip->open( $zip_path );
 
 		if ( true !== $result ) {
@@ -644,12 +787,10 @@ class Git_Code_Update_Admin {
 	 * @return bool|WP_Error True on success, WP_Error on failure.
 	 */
 	private function copy_directory( $source, $destination ) {
-		// Use WordPress Filesystem API.
 		if ( ! function_exists( 'WP_Filesystem' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
 
-		// Initialize WP_Filesystem.
 		$access_type = get_filesystem_method();
 		if ( 'direct' === $access_type ) {
 			WP_Filesystem();
@@ -664,7 +805,6 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		// Check if source exists.
 		if ( ! $wp_filesystem->is_dir( $source ) ) {
 			return new WP_Error(
 				'source_not_found',
@@ -676,12 +816,10 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		// Create destination if it doesn't exist.
 		if ( ! $wp_filesystem->is_dir( $destination ) ) {
 			$wp_filesystem->mkdir( $destination, FS_CHMOD_DIR );
 		}
 
-		// Copy files recursively.
 		$result = $this->recursive_copy( $source, $destination );
 
 		if ( is_wp_error( $result ) ) {
@@ -714,7 +852,6 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		// Create destination directory.
 		if ( ! $wp_filesystem->is_dir( $destination ) ) {
 			$wp_filesystem->mkdir( $destination, FS_CHMOD_DIR );
 		}
@@ -728,14 +865,12 @@ class Git_Code_Update_Admin {
 			$destination_path = $destination . '/' . $file;
 
 			if ( is_dir( $source_path ) ) {
-				// Recursively copy subdirectory.
 				$result = $this->recursive_copy( $source_path, $destination_path );
 				if ( is_wp_error( $result ) ) {
 					closedir( $dir );
 					return $result;
 				}
 			} else {
-				// Copy file.
 				$content = $wp_filesystem->get_contents( $source_path );
 				if ( false === $content ) {
 					closedir( $dir );
@@ -815,7 +950,7 @@ class Git_Code_Update_Admin {
 	 * @return void
 	 */
 	private function add_log( $message ) {
-		$timestamp = current_time( 'H:i:s' );
+		$timestamp    = current_time( 'H:i:s' );
 		$this->log[] = '[' . $timestamp . '] ' . $message;
 	}
 
@@ -825,7 +960,6 @@ class Git_Code_Update_Admin {
 	 * @return void
 	 */
 	private function save_log() {
-		// Keep only last 50 entries.
 		if ( count( $this->log ) > 50 ) {
 			$this->log = array_slice( $this->log, -50 );
 		}
