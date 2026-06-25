@@ -4,7 +4,7 @@ Tags: github, git, deploy, update, code
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -17,6 +17,7 @@ Git Code Update allows WordPress administrators to pull code directly from a Git
 = Features =
 
 * Configure GitHub repository URL, branch name, target folder, and access token
+* Fetch available branches from GitHub and select from a dropdown
 * One-click code pulling from GitHub
 * Automatic ZIP download and extraction
 * Operation logging for debugging
@@ -76,6 +77,9 @@ Yes, the plugin supports WordPress multisite installations.
 
 == Changelog ==
 
+= 1.3.0 =
+* Added Load Branches button to fetch and select branches from GitHub
+
 = 1.2.0 =
 * Added personal access token support for private GitHub repositories
 
@@ -83,6 +87,9 @@ Yes, the plugin supports WordPress multisite installations.
 * Initial release
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Added a Load Branches button that fetches available branches from GitHub and lets you select one from a dropdown.
 
 = 1.2.0 =
 Added support for pulling code from private GitHub repositories using personal access tokens.

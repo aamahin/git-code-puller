@@ -65,6 +65,9 @@ class Git_Code_Update_Admin {
 		// Handle AJAX pull request.
 		add_action( 'wp_ajax_git_code_update_pull', array( $this, 'ajax_pull_code' ) );
 
+		// Handle AJAX branch list request.
+		add_action( 'wp_ajax_git_code_update_fetch_branches', array( $this, 'ajax_fetch_branches' ) );
+
 		// Add plugin action links.
 		add_filter( 'plugin_action_links_' . GIT_CODE_UPDATE_PLUGIN_BASENAME, array( $this, 'add_plugin_action_links' ) );
 	}
@@ -304,9 +307,16 @@ class Git_Code_Update_Admin {
 								name="git_code_update_settings[repos][<?php echo esc_attr( $index ); ?>][branch_name]"
 								value="<?php echo esc_attr( $repo['branch_name'] ?? 'main' ); ?>"
 								placeholder="main"
-								class="regular-text"
+								class="regular-text git-code-update-branch-input"
+								list="git-code-update-branches-<?php echo esc_attr( $index ); ?>"
 							/>
-							<span class="description"><?php esc_html_e( 'Branch to pull (e.g., main, master, develop).', 'git-code-update' ); ?></span>
+							<datalist id="git-code-update-branches-<?php echo esc_attr( $index ); ?>"></datalist>
+							<button type="button" class="button git-code-update-fetch-branches-btn" data-index="<?php echo esc_attr( $index ); ?>">
+								<span class="dashicons dashicons-list-view" style="margin-top: 4px;"></span>
+								<?php esc_html_e( 'Load Branches', 'git-code-update' ); ?>
+							</button>
+							<span class="git-code-update-fetch-status" data-index="<?php echo esc_attr( $index ); ?>"></span>
+							<span class="description"><?php esc_html_e( 'Type a branch name or click Load Branches to fetch available branches from GitHub.', 'git-code-update' ); ?></span>
 						</p>
 						<p class="git-code-update-field-row">
 							<label>
@@ -382,9 +392,16 @@ class Git_Code_Update_Admin {
 							name="git_code_update_settings[repos][{{INDEX}}][branch_name]"
 							value="main"
 							placeholder="main"
-							class="regular-text"
+							class="regular-text git-code-update-branch-input"
+							list="git-code-update-branches-{{INDEX}}"
 						/>
-						<span class="description"><?php esc_html_e( 'Branch to pull (e.g., main, master, develop).', 'git-code-update' ); ?></span>
+						<datalist id="git-code-update-branches-{{INDEX}}"></datalist>
+						<button type="button" class="button git-code-update-fetch-branches-btn" data-index="{{INDEX}}">
+							<span class="dashicons dashicons-list-view" style="margin-top: 4px;"></span>
+							<?php esc_html_e( 'Load Branches', 'git-code-update' ); ?>
+						</button>
+						<span class="git-code-update-fetch-status" data-index="{{INDEX}}"></span>
+						<span class="description"><?php esc_html_e( 'Type a branch name or click Load Branches to fetch available branches from GitHub.', 'git-code-update' ); ?></span>
 					</p>
 					<p class="git-code-update-field-row">
 						<label><?php esc_html_e( 'Target Plugin Folder', 'git-code-update' ); ?></label>
@@ -511,11 +528,14 @@ class Git_Code_Update_Admin {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'git_code_update_pull_nonce' ),
 				'strings' => array(
-					'confirmPull'  => __( 'Are you sure you want to pull code for this repository? This will overwrite the target folder.', 'git-code-update' ),
-					'pulling'      => __( 'Pulling code...', 'git-code-update' ),
-					'success'      => __( 'Code pulled successfully!', 'git-code-update' ),
-					'error'        => __( 'Error pulling code. Please check the log for details.', 'git-code-update' ),
-					'repoLabel'    => __( 'Repository #', 'git-code-update' ),
+					'confirmPull'    => __( 'Are you sure you want to pull code for this repository? This will overwrite the target folder.', 'git-code-update' ),
+					'pulling'        => __( 'Pulling code...', 'git-code-update' ),
+					'success'        => __( 'Code pulled successfully!', 'git-code-update' ),
+					'error'          => __( 'Error pulling code. Please check the log for details.', 'git-code-update' ),
+					'repoLabel'      => __( 'Repository #', 'git-code-update' ),
+					'loadingBranches'=> __( 'Loading branches...', 'git-code-update' ),
+					'branchesLoaded' => __( 'Branches loaded.', 'git-code-update' ),
+					'loadBranches'   => __( 'Load Branches', 'git-code-update' ),
 				),
 			)
 		);
@@ -717,6 +737,138 @@ class Git_Code_Update_Admin {
 				'timestamp'  => $this->settings['repos'][ $repo_index ]['last_pull_time'],
 				'repo_index' => $repo_index,
 				'log'        => $this->log,
+			)
+		);
+	}
+
+	/**
+	 * Handle AJAX request to fetch branch list for a specific repository.
+	 *
+	 * @return void
+	 */
+	public function ajax_fetch_branches() {
+		// Verify nonce.
+		check_ajax_referer( 'git_code_update_pull_nonce', 'nonce' );
+
+		// Check user capabilities.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'You do not have permission to perform this action.', 'git-code-update' ),
+				)
+			);
+		}
+
+		// Get repo index from request.
+		$repo_index = isset( $_POST['repo_index'] ) ? absint( $_POST['repo_index'] ) : 0;
+
+		// Refresh settings.
+		$this->settings = get_option( 'git_code_update_settings', array() );
+		$this->settings = git_code_update_migrate_settings( $this->settings );
+
+		// Validate repo index.
+		$repos = $this->settings['repos'] ?? array();
+		if ( ! isset( $repos[ $repo_index ] ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Invalid repository index.', 'git-code-update' ),
+				)
+			);
+		}
+
+		$repo       = $repos[ $repo_index ];
+		$repo_url   = $repo['repo_url'] ?? '';
+		$repo_token = $repo['repo_token'] ?? '';
+
+		if ( empty( $repo_url ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Please configure the GitHub Repository URL first.', 'git-code-update' ),
+				)
+			);
+		}
+
+		if ( ! $this->is_valid_github_url( $repo_url ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Invalid GitHub repository URL.', 'git-code-update' ),
+				)
+			);
+		}
+
+		// Parse owner/repo from URL.
+		$repo_url = untrailingslashit( $repo_url );
+		$parsed   = wp_parse_url( $repo_url );
+		$path     = trim( $parsed['path'] ?? '', '/' );
+		$path     = preg_replace( '/\.git$/', '', $path );
+
+		$api_url = 'https://api.github.com/repos/' . $path . '/branches';
+
+		$args = array(
+			'timeout' => 60,
+			'headers' => array(
+				'Accept' => 'application/vnd.github+json',
+			),
+		);
+
+		if ( ! empty( $repo_token ) ) {
+			$args['headers']['Authorization'] = 'Bearer ' . $repo_token;
+		}
+
+		$response = wp_remote_get( $api_url, $args );
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error(
+				array(
+					'message' => $response->get_error_message(),
+				)
+			);
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		$body        = wp_remote_retrieve_body( $response );
+
+		if ( 200 !== $status_code ) {
+			wp_send_json_error(
+				array(
+					'message' => sprintf(
+						/* translators: %d: HTTP status code */
+						__( 'GitHub API returned HTTP %d. Make sure the repository exists and the token has access.', 'git-code-update' ),
+						$status_code
+					),
+				)
+			);
+		}
+
+		$data = json_decode( $body, true );
+
+		if ( ! is_array( $data ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Unexpected response from GitHub API.', 'git-code-update' ),
+				)
+			);
+		}
+
+		$branches = array();
+		foreach ( $data as $branch ) {
+			if ( isset( $branch['name'] ) ) {
+				$branches[] = sanitize_text_field( $branch['name'] );
+			}
+		}
+
+		if ( empty( $branches ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'No branches found for this repository.', 'git-code-update' ),
+				)
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'branches'   => $branches,
+				'repo_index' => $repo_index,
 			)
 		);
 	}

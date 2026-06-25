@@ -140,6 +140,79 @@
 		}
 
 		/**
+		 * Handle fetch branches button click.
+		 */
+		$container.on('click', '.git-code-update-fetch-branches-btn', function (e) {
+			e.preventDefault();
+
+			const $btn = $(this);
+			const repoIndex = $btn.attr('data-index');
+			const $row = $btn.closest('.git-code-update-repo-row');
+			const $status = $row.find('.git-code-update-fetch-status');
+			const $datalist = $row.find('.git-code-update-branch-input').attr('list');
+
+			// Set loading state.
+			$btn.addClass('loading').prop('disabled', true);
+			$status
+				.text('')
+				.removeClass('success error')
+				.addClass('loading')
+				.html('<span class="spinner is-active" style="float:none;margin:0 4px 0 0;"></span> ' + gitCodeUpdate.strings.loadingBranches);
+
+			hideGlobalStatus();
+
+			// Send AJAX request.
+			$.ajax({
+				url: gitCodeUpdate.ajaxUrl,
+				type: 'POST',
+				data: {
+					action: 'git_code_update_fetch_branches',
+					nonce: gitCodeUpdate.nonce,
+					repo_index: repoIndex,
+				},
+				success: function (response) {
+					if (response.success && response.data.branches) {
+						const $list = $('#' + $datalist);
+						$list.empty();
+
+						response.data.branches.forEach(function (branch) {
+							$list.append('<option value="' + branch + '"></option>');
+						});
+
+						$status
+							.removeClass('loading')
+							.addClass('success')
+							.text('✓ ' + gitCodeUpdate.strings.branchesLoaded);
+					} else {
+						$status
+							.removeClass('loading')
+							.addClass('error')
+							.text('✗ ' + (response.data.message || gitCodeUpdate.strings.error));
+					}
+				},
+				error: function (xhr, statusText, error) {
+					let errorMessage = gitCodeUpdate.strings.error;
+
+					if (xhr.responseJSON && xhr.responseJSON.data) {
+						errorMessage = xhr.responseJSON.data.message || errorMessage;
+					} else if (error) {
+						errorMessage += ' (' + error + ')';
+					}
+
+					$status.removeClass('loading').addClass('error').text('✗ ' + errorMessage);
+				},
+				complete: function () {
+					$btn.removeClass('loading').prop('disabled', false);
+
+					// Clear loading spinner from status after a brief moment.
+					setTimeout(function () {
+						$status.find('.spinner').remove();
+					}, 500);
+				},
+			});
+		});
+
+		/**
 		 * Handle per-repo pull button click.
 		 */
 		$container.on('click', '.git-code-update-pull-single-btn', function (e) {

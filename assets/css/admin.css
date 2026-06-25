@@ -158,6 +158,48 @@
 	color: #1d2327;
 }
 
+/* Fetch Branches Button */
+.git-code-update-fetch-branches-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 6px;
+	height: 32px;
+	font-size: 13px;
+	border-radius: 3px;
+	vertical-align: top;
+}
+
+.git-code-update-fetch-branches-btn.loading {
+	opacity: 0.7;
+	cursor: not-allowed;
+}
+
+.git-code-update-fetch-branches-btn.loading .dashicons {
+	animation: gcu-spin 1s linear infinite;
+}
+
+/* Fetch Branches Status */
+.git-code-update-fetch-status {
+	display: inline-block;
+	margin-left: 8px;
+	font-size: 13px;
+	font-weight: 500;
+	vertical-align: middle;
+}
+
+.git-code-update-fetch-status.success {
+	color: #00a32a;
+}
+
+.git-code-update-fetch-status.error {
+	color: #d63638;
+}
+
+.git-code-update-fetch-status.loading {
+	color: #2271b1;
+}
+
 /* Pull Single Button */
 .git-code-update-pull-single-btn {
 	display: inline-flex;
