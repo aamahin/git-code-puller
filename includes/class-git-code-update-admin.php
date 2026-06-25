@@ -760,9 +760,10 @@ class Git_Code_Update_Admin {
 		// Get repo index from request.
 		$repo_index = isset( $_POST['repo_index'] ) ? absint( $_POST['repo_index'] ) : 0;
 
-		// Refresh settings.
+		// Refresh settings and log.
 		$this->settings = get_option( 'git_code_update_settings', array() );
 		$this->settings = git_code_update_migrate_settings( $this->settings );
+		$this->log      = get_option( 'git_code_update_log', array() );
 
 		// Validate repo index.
 		$repos = $this->settings['repos'] ?? array();
@@ -802,23 +803,30 @@ class Git_Code_Update_Admin {
 
 		$api_url = 'https://api.github.com/repos/' . $path . '/branches';
 
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Fetching branches from: ' . $api_url );
+
 		$args = array(
 			'timeout' => 60,
 			'headers' => array(
-				'Accept' => 'application/vnd.github+json',
+				'Accept'               => 'application/vnd.github+json',
+				'X-GitHub-Api-Version' => '2022-11-28',
 			),
 		);
 
 		if ( ! empty( $repo_token ) ) {
 			$args['headers']['Authorization'] = 'Bearer ' . $repo_token;
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] Using personal access token for authentication.' );
 		}
 
 		$response = wp_remote_get( $api_url, $args );
 
 		if ( is_wp_error( $response ) ) {
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] Request failed: ' . $response->get_error_message() );
+			$this->save_log();
 			wp_send_json_error(
 				array(
 					'message' => $response->get_error_message(),
+					'log'     => $this->log,
 				)
 			);
 		}
@@ -826,14 +834,21 @@ class Git_Code_Update_Admin {
 		$status_code = wp_remote_retrieve_response_code( $response );
 		$body        = wp_remote_retrieve_body( $response );
 
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] GitHub API response code: ' . $status_code );
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] GitHub API response body: ' . wp_json_encode( $body ) );
+
 		if ( 200 !== $status_code ) {
+			$message = sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'GitHub API returned HTTP %d. Make sure the repository exists and the token has access.', 'git-code-update' ),
+				$status_code
+			);
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] ' . $message );
+			$this->save_log();
 			wp_send_json_error(
 				array(
-					'message' => sprintf(
-						/* translators: %d: HTTP status code */
-						__( 'GitHub API returned HTTP %d. Make sure the repository exists and the token has access.', 'git-code-update' ),
-						$status_code
-					),
+					'message' => $message,
+					'log'     => $this->log,
 				)
 			);
 		}
@@ -841,9 +856,12 @@ class Git_Code_Update_Admin {
 		$data = json_decode( $body, true );
 
 		if ( ! is_array( $data ) ) {
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] Unexpected response format from GitHub API.' );
+			$this->save_log();
 			wp_send_json_error(
 				array(
 					'message' => __( 'Unexpected response from GitHub API.', 'git-code-update' ),
+					'log'     => $this->log,
 				)
 			);
 		}
@@ -855,18 +873,26 @@ class Git_Code_Update_Admin {
 			}
 		}
 
+		$this->add_log( '[' . ( $repo_index + 1 ) . '] Branches found: ' . count( $branches ) );
+
 		if ( empty( $branches ) ) {
+			$this->add_log( '[' . ( $repo_index + 1 ) . '] No branches found for this repository.' );
+			$this->save_log();
 			wp_send_json_error(
 				array(
 					'message' => __( 'No branches found for this repository.', 'git-code-update' ),
+					'log'     => $this->log,
 				)
 			);
 		}
+
+		$this->save_log();
 
 		wp_send_json_success(
 			array(
 				'branches'   => $branches,
 				'repo_index' => $repo_index,
+				'log'        => $this->log,
 			)
 		);
 	}

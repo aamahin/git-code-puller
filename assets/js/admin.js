@@ -160,6 +160,8 @@
 				.html('<span class="spinner is-active" style="float:none;margin:0 4px 0 0;"></span> ' + gitCodeUpdate.strings.loadingBranches);
 
 			hideGlobalStatus();
+			$logSection.hide();
+			$logOutput.text('');
 
 			// Send AJAX request.
 			$.ajax({
@@ -171,7 +173,11 @@
 					repo_index: repoIndex,
 				},
 				success: function (response) {
-					if (response.success && response.data.branches) {
+					if (response.data && response.data.log) {
+						displayLog(response.data.log);
+					}
+
+					if (response.success && response.data.branches && response.data.branches.length > 0) {
 						const currentValue = $select.val();
 						$select.empty();
 
@@ -188,7 +194,7 @@
 						$status
 							.removeClass('loading')
 							.addClass('success')
-							.text('✓ ' + gitCodeUpdate.strings.branchesLoaded);
+							.text('✓ ' + gitCodeUpdate.strings.branchesLoaded + ' (' + response.data.branches.length + ')');
 					} else {
 						$status
 							.removeClass('loading')
@@ -201,6 +207,9 @@
 
 					if (xhr.responseJSON && xhr.responseJSON.data) {
 						errorMessage = xhr.responseJSON.data.message || errorMessage;
+						if (xhr.responseJSON.data.log) {
+							displayLog(xhr.responseJSON.data.log);
+						}
 					} else if (error) {
 						errorMessage += ' (' + error + ')';
 					}
