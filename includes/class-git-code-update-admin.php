@@ -303,20 +303,20 @@ class Git_Code_Update_Admin {
 							<label>
 								<?php esc_html_e( 'Branch Name', 'git-code-update' ); ?>
 							</label>
-							<input type="text"
+							<select
 								name="git_code_update_settings[repos][<?php echo esc_attr( $index ); ?>][branch_name]"
-								value="<?php echo esc_attr( $repo['branch_name'] ?? 'main' ); ?>"
-								placeholder="main"
-								class="regular-text git-code-update-branch-input"
-								list="git-code-update-branches-<?php echo esc_attr( $index ); ?>"
-							/>
-							<datalist id="git-code-update-branches-<?php echo esc_attr( $index ); ?>"></datalist>
+								class="regular-text git-code-update-branch-select"
+							>
+								<option value="<?php echo esc_attr( $repo['branch_name'] ?? 'main' ); ?>" selected>
+									<?php echo esc_html( $repo['branch_name'] ?? 'main' ); ?>
+								</option>
+							</select>
 							<button type="button" class="button git-code-update-fetch-branches-btn" data-index="<?php echo esc_attr( $index ); ?>">
 								<span class="dashicons dashicons-list-view" style="margin-top: 4px;"></span>
 								<?php esc_html_e( 'Load Branches', 'git-code-update' ); ?>
 							</button>
 							<span class="git-code-update-fetch-status" data-index="<?php echo esc_attr( $index ); ?>"></span>
-							<span class="description"><?php esc_html_e( 'Type a branch name or click Load Branches to fetch available branches from GitHub.', 'git-code-update' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Select a branch or click Load Branches to fetch available branches from GitHub.', 'git-code-update' ); ?></span>
 						</p>
 						<p class="git-code-update-field-row">
 							<label>
@@ -388,20 +388,18 @@ class Git_Code_Update_Admin {
 					</p>
 					<p class="git-code-update-field-row">
 						<label><?php esc_html_e( 'Branch Name', 'git-code-update' ); ?></label>
-						<input type="text"
+						<select
 							name="git_code_update_settings[repos][{{INDEX}}][branch_name]"
-							value="main"
-							placeholder="main"
-							class="regular-text git-code-update-branch-input"
-							list="git-code-update-branches-{{INDEX}}"
-						/>
-						<datalist id="git-code-update-branches-{{INDEX}}"></datalist>
+							class="regular-text git-code-update-branch-select"
+						>
+							<option value="main" selected>main</option>
+						</select>
 						<button type="button" class="button git-code-update-fetch-branches-btn" data-index="{{INDEX}}">
 							<span class="dashicons dashicons-list-view" style="margin-top: 4px;"></span>
 							<?php esc_html_e( 'Load Branches', 'git-code-update' ); ?>
 						</button>
 						<span class="git-code-update-fetch-status" data-index="{{INDEX}}"></span>
-						<span class="description"><?php esc_html_e( 'Type a branch name or click Load Branches to fetch available branches from GitHub.', 'git-code-update' ); ?></span>
+						<span class="description"><?php esc_html_e( 'Select a branch or click Load Branches to fetch available branches from GitHub.', 'git-code-update' ); ?></span>
 					</p>
 					<p class="git-code-update-field-row">
 						<label><?php esc_html_e( 'Target Plugin Folder', 'git-code-update' ); ?></label>

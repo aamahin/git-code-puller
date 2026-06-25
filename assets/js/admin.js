@@ -149,7 +149,7 @@
 			const repoIndex = $btn.attr('data-index');
 			const $row = $btn.closest('.git-code-update-repo-row');
 			const $status = $row.find('.git-code-update-fetch-status');
-			const $datalist = $row.find('.git-code-update-branch-input').attr('list');
+			const $select = $row.find('.git-code-update-branch-select');
 
 			// Set loading state.
 			$btn.addClass('loading').prop('disabled', true);
@@ -172,12 +172,18 @@
 				},
 				success: function (response) {
 					if (response.success && response.data.branches) {
-						const $list = $('#' + $datalist);
-						$list.empty();
+						const currentValue = $select.val();
+						$select.empty();
 
 						response.data.branches.forEach(function (branch) {
-							$list.append('<option value="' + branch + '"></option>');
+							const selected = branch === currentValue ? ' selected' : '';
+							$select.append('<option value="' + branch + '"' + selected + '>' + branch + '</option>');
 						});
+
+						// Preserve the current value if it is not in the fetched list.
+						if (currentValue && response.data.branches.indexOf(currentValue) === -1) {
+							$select.prepend('<option value="' + currentValue + '" selected>' + currentValue + '</option>');
+						}
 
 						$status
 							.removeClass('loading')
