@@ -88,7 +88,7 @@
 
 			if (rowCount <= 1) {
 				// Don't remove the last row, just clear its fields instead.
-				$row.find('input[type="text"]').val('');
+				$row.find('input').val('');
 				$row.find('input[name*="[branch_name]"]').val('main');
 				$row
 					.find('.git-code-update-single-status')

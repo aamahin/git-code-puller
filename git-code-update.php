@@ -3,7 +3,7 @@
  * Plugin Name: Git Code Update
  * Plugin URI:  https://github.com/your-repo/git-code-update
  * Description: Pull code directly from GitHub repositories into the WordPress plugins folder. Supports multiple repositories with quick deployment of plugin updates from GitHub without manual file uploads.
- * Version:     1.1.0
+ * Version:     1.2.0
  * Author:      Your Name
  * Author URI:  https://yourwebsite.com
  * License:     GPL-2.0+
@@ -24,7 +24,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Current plugin version.
  */
-define( 'GIT_CODE_UPDATE_VERSION', '1.1.0' );
+define( 'GIT_CODE_UPDATE_VERSION', '1.2.0' );
 
 /**
  * Plugin directory path.
@@ -85,6 +85,7 @@ function git_code_update_migrate_settings( $settings ) {
 			'repo_url'      => $settings['repo_url'] ?? '',
 			'branch_name'   => $settings['branch_name'] ?? 'main',
 			'target_folder' => $settings['target_folder'] ?? '',
+			'repo_token'    => $settings['repo_token'] ?? '',
 			'last_pull_time'=> $settings['last_pull_time'] ?? '',
 		);
 		$settings = array(
@@ -113,6 +114,7 @@ function git_code_update_activate() {
 				'repo_url'      => '',
 				'branch_name'   => 'main',
 				'target_folder' => '',
+				'repo_token'    => '',
 				'last_pull_time'=> '',
 			),
 		),

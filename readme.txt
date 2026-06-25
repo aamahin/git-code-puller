@@ -4,7 +4,7 @@ Tags: github, git, deploy, update, code
 Requires at least: 5.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +16,7 @@ Git Code Update allows WordPress administrators to pull code directly from a Git
 
 = Features =
 
-* Configure GitHub repository URL, branch name, and target folder
+* Configure GitHub repository URL, branch name, target folder, and access token
 * One-click code pulling from GitHub
 * Automatic ZIP download and extraction
 * Operation logging for debugging
@@ -41,6 +41,7 @@ Git Code Update allows WordPress administrators to pull code directly from a Git
 
 * Always backup your files before pulling code
 * The target folder will be overwritten with the repository contents
+* For private repositories, enter a GitHub personal access token with repo scope
 * Make sure the GitHub repository is public or accessible from your server
 
 == Installation ==
@@ -57,7 +58,7 @@ Yes, the plugin uses WordPress nonces for form submissions, checks user capabili
 
 = Can I use private repositories? =
 
-The plugin uses direct HTTP requests to download ZIP files. For private repositories, you would need to modify the code to include authentication headers.
+Yes. Enter a GitHub personal access token with at least `repo` scope in the repository settings. The plugin will use the GitHub API to download private repository archives.
 
 = What happens to existing files in the target folder? =
 
@@ -75,10 +76,16 @@ Yes, the plugin supports WordPress multisite installations.
 
 == Changelog ==
 
+= 1.2.0 =
+* Added personal access token support for private GitHub repositories
+
 = 1.0.0 =
 * Initial release
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Added support for pulling code from private GitHub repositories using personal access tokens.
 
 = 1.0.0 =
 Initial release of the Git Code Update plugin.

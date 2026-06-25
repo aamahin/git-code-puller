@@ -164,6 +164,9 @@ class Git_Code_Update_Admin {
 					$clean_repo['target_folder'] = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $clean_repo['target_folder'] );
 				}
 
+				// Sanitize access token.
+				$clean_repo['repo_token'] = sanitize_text_field( trim( $repo['repo_token'] ?? '' ) );
+
 				// Preserve last pull time from existing settings.
 				$existing_repos = $this->settings['repos'] ?? array();
 				$existing_repo  = $existing_repos[ $index ] ?? array();
@@ -185,6 +188,7 @@ class Git_Code_Update_Admin {
 					'repo_url'      => '',
 					'branch_name'   => 'main',
 					'target_folder' => '',
+					'repo_token'    => '',
 					'last_pull_time'=> '',
 				),
 			);
@@ -256,6 +260,7 @@ class Git_Code_Update_Admin {
 					'repo_url'      => '',
 					'branch_name'   => 'main',
 					'target_folder' => '',
+					'repo_token'    => '',
 					'last_pull_time'=> '',
 				),
 			);
@@ -314,6 +319,18 @@ class Git_Code_Update_Admin {
 								class="regular-text"
 							/>
 							<span class="description"><?php esc_html_e( 'Destination folder inside wp-content/plugins/.', 'git-code-update' ); ?></span>
+						</p>
+						<p class="git-code-update-field-row">
+							<label>
+								<?php esc_html_e( 'Personal Access Token', 'git-code-update' ); ?>
+							</label>
+							<input type="password"
+								name="git_code_update_settings[repos][<?php echo esc_attr( $index ); ?>][repo_token]"
+								value="<?php echo esc_attr( $repo['repo_token'] ?? '' ); ?>"
+								placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+								class="regular-text"
+							/>
+							<span class="description"><?php esc_html_e( 'GitHub personal access token for private repositories. Leave empty for public repos.', 'git-code-update' ); ?></span>
 						</p>
 						<?php if ( ! empty( $repo['last_pull_time'] ) ) : ?>
 							<p class="git-code-update-field-row git-code-update-last-pull-row">
@@ -380,6 +397,16 @@ class Git_Code_Update_Admin {
 						<span class="description"><?php esc_html_e( 'Destination folder inside wp-content/plugins/.', 'git-code-update' ); ?></span>
 					</p>
 					<p class="git-code-update-field-row">
+						<label><?php esc_html_e( 'Personal Access Token', 'git-code-update' ); ?></label>
+						<input type="password"
+							name="git_code_update_settings[repos][{{INDEX}}][repo_token]"
+							value=""
+							placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+							class="regular-text"
+						/>
+						<span class="description"><?php esc_html_e( 'GitHub personal access token for private repositories. Leave empty for public repos.', 'git-code-update' ); ?></span>
+					</p>
+					<p class="git-code-update-field-row">
 						<button type="button" class="button git-code-update-pull-single-btn" data-index="{{INDEX}}">
 							<span class="dashicons dashicons-update" style="margin-top: 4px;"></span>
 							<?php esc_html_e( 'Pull Code', 'git-code-update' ); ?>
@@ -440,6 +467,7 @@ class Git_Code_Update_Admin {
 				<ul>
 					<li><?php echo esc_html__( 'Always backup your files before pulling code.', 'git-code-update' ); ?></li>
 					<li><?php echo esc_html__( 'The target folder will be overwritten with the repository contents.', 'git-code-update' ); ?></li>
+					<li><?php echo esc_html__( 'For private repositories, enter a GitHub personal access token with repo scope.', 'git-code-update' ); ?></li>
 					<li><?php echo esc_html__( 'Make sure the GitHub repository is public or accessible from your server.', 'git-code-update' ); ?></li>
 					<li><?php echo esc_html__( 'The branch name must exist in the repository.', 'git-code-update' ); ?></li>
 					<li><?php echo esc_html__( 'Save your settings before pulling code from a newly added repository.', 'git-code-update' ); ?></li>
@@ -529,10 +557,11 @@ class Git_Code_Update_Admin {
 			);
 		}
 
-		$repo         = $repos[ $repo_index ];
-		$repo_url     = $repo['repo_url'] ?? '';
-		$branch_name  = $repo['branch_name'] ?? 'main';
+		$repo          = $repos[ $repo_index ];
+		$repo_url      = $repo['repo_url'] ?? '';
+		$branch_name   = $repo['branch_name'] ?? 'main';
 		$target_folder = $repo['target_folder'] ?? '';
+		$repo_token    = $repo['repo_token'] ?? '';
 
 		// Validation checks.
 		if ( empty( $repo_url ) ) {
@@ -563,13 +592,22 @@ class Git_Code_Update_Admin {
 		$repo_url = untrailingslashit( $repo_url );
 		$parsed   = wp_parse_url( $repo_url );
 		$path     = trim( $parsed['path'] ?? '', '/' );
-		$zip_url  = 'https://github.com/' . $path . '/archive/refs/heads/' . rawurlencode( $branch_name ) . '.zip';
+
+		// Strip optional .git suffix from repository URLs.
+		$path = preg_replace( '/\.git$/', '', $path );
+
+		if ( ! empty( $repo_token ) ) {
+			// Use the GitHub API endpoint for authenticated (private) repositories.
+			$zip_url = 'https://api.github.com/repos/' . $path . '/zipball/' . rawurlencode( $branch_name );
+		} else {
+			$zip_url = 'https://github.com/' . $path . '/archive/refs/heads/' . rawurlencode( $branch_name ) . '.zip';
+		}
 
 		$this->add_log( '[' . ( $repo_index + 1 ) . '] Starting pull from: ' . $zip_url );
 
 		// Step 1: Download the ZIP file.
 		$this->add_log( '[' . ( $repo_index + 1 ) . '] Downloading ZIP file...' );
-		$download_result = $this->download_file( $zip_url );
+		$download_result = $this->download_file( $zip_url, $repo_token );
 
 		if ( is_wp_error( $download_result ) ) {
 			$this->add_log( '[' . ( $repo_index + 1 ) . '] Download failed: ' . $download_result->get_error_message() );
@@ -686,26 +724,30 @@ class Git_Code_Update_Admin {
 	/**
 	 * Download a file from a URL.
 	 *
-	 * @param string $url The URL to download from.
+	 * @param string $url   The URL to download from.
+	 * @param string $token Optional GitHub personal access token.
 	 * @return array|WP_Error Array with file_path on success, WP_Error on failure.
 	 */
-	private function download_file( $url ) {
+	private function download_file( $url, $token = '' ) {
 		$temp_dir = get_temp_dir() . 'git-code-update-' . wp_generate_password( 12, false ) . '/';
 		wp_mkdir_p( $temp_dir );
 
 		$file_path = $temp_dir . 'repo.zip';
 
-		$response = wp_remote_get(
-			$url,
-			array(
-				'timeout'  => 120,
-				'stream'   => true,
-				'filename' => $file_path,
-				'headers'  => array(
-					'Accept' => 'application/zip',
-				),
-			)
+		$args = array(
+			'timeout'  => 120,
+			'stream'   => true,
+			'filename' => $file_path,
+			'headers'  => array(
+				'Accept' => 'application/zip',
+			),
 		);
+
+		if ( ! empty( $token ) ) {
+			$args['headers']['Authorization'] = 'Bearer ' . $token;
+		}
+
+		$response = wp_remote_get( $url, $args );
 
 		if ( is_wp_error( $response ) ) {
 			$this->cleanup_temp_dir( $temp_dir );
